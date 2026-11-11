@@ -6,12 +6,13 @@ import type { AgentResult, AgentStep } from "@/lib/agent/types";
 type Message = { role: "user" | "model"; text: string; steps?: AgentStep[] };
 
 const SAMPLE_PROMPTS = [
-  "Show me the vegetarian meals on the menu.",
-  "How much money is in my wallet?",
-  "What pickup times are available?",
+  "What's veg under Rs 80 today?",
+  "I have Rs 150. Get me lunch with something sweet, pick up at 1:15.",
+  "Add a chicken biryani too.",
+  "Cancel my latest order.",
 ];
 
-export default function AgentChat() {
+export default function AgentChat({ onDataChanged }: { onDataChanged?: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -44,6 +45,7 @@ export default function AgentChat() {
       if (!res.ok) throw new Error(data.error ?? "Request failed");
       const result = data as AgentResult;
       setMessages([...next, { role: "model", text: result.reply, steps: result.steps }]);
+      if (result.steps.some((step) => step.writes && step.ok)) onDataChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
