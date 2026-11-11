@@ -22,3 +22,9 @@ insert into tasks (title, due_date, status) values
   ('Write README for the project', current_date + 1, 'open');
 
 alter table tasks enable row level security;
+
+-- Give the server key (service_role) access, then tell the Supabase API to see the new tables.
+grant usage on schema public to service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+notify pgrst, 'reload schema';

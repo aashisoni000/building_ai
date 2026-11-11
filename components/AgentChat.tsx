@@ -5,19 +5,19 @@ import type { AgentResult, AgentStep } from "@/lib/agent/types";
 
 type Message = { role: "user" | "model"; text: string; steps?: AgentStep[] };
 
-// YOUR JOB: change these sample prompts to match your problem statement.
 const SAMPLE_PROMPTS = [
-  "Add a task to call the vendor tomorrow, then show all my tasks.",
-  "Which tasks are still open?",
-  "Mark the vendor call task as done.",
+  "Show me the vegetarian meals on the menu.",
+  "How much money is in my wallet?",
+  "What pickup times are available?",
 ];
 
-export default function AgentChat({ onDataChanged }: { onDataChanged?: () => void }) {
+export default function AgentChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -25,7 +25,8 @@ export default function AgentChat({ onDataChanged }: { onDataChanged?: () => voi
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || loading) return;
+    if (!trimmed || sendingRef.current) return;
+    sendingRef.current = true;
     const next: Message[] = [...messages, { role: "user", text: trimmed }];
     setMessages(next);
     setInput("");
@@ -43,10 +44,10 @@ export default function AgentChat({ onDataChanged }: { onDataChanged?: () => voi
       if (!res.ok) throw new Error(data.error ?? "Request failed");
       const result = data as AgentResult;
       setMessages([...next, { role: "model", text: result.reply, steps: result.steps }]);
-      if (result.steps.some((s) => s.writes && s.ok)) onDataChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
+      sendingRef.current = false;
       setLoading(false);
     }
   }
@@ -54,8 +55,8 @@ export default function AgentChat({ onDataChanged }: { onDataChanged?: () => voi
   return (
     <div className="flex h-[70vh] flex-col rounded-xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
-        <h2 className="font-semibold">Agent</h2>
-        <p className="text-xs text-slate-500">Ask in plain English. You can see every tool the agent uses.</p>
+        <h2 className="font-semibold">CampusBite assistant</h2>
+        <p className="text-xs text-slate-500">Ask about the menu, your wallet, pickup times, or recent orders.</p>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -66,7 +67,8 @@ export default function AgentChat({ onDataChanged }: { onDataChanged?: () => voi
               <button
                 key={p}
                 onClick={() => send(p)}
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                disabled={loading}
+                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {p}
               </button>

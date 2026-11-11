@@ -9,7 +9,7 @@ import { buildSystemPrompt } from "./systemPrompt";
 import type { AgentResult, AgentStep } from "./types";
 
 /** Stops the agent from looping forever and using up your Gemini quota. */
-const MAX_ROUNDS = 5;
+const MAX_ROUNDS = 8;
 
 /**
  * THE AGENT LOOP
@@ -29,15 +29,27 @@ export async function runAgent(messages: ChatMessage[]): Promise<AgentResult> {
   }));
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents,
-      config: {
-        systemInstruction: buildSystemPrompt(),
-        tools: [{ functionDeclarations }],
-        temperature: 0.2,
-      },
-    });
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents,
+        config: {
+          systemInstruction: buildSystemPrompt(),
+          tools: [{ functionDeclarations }],
+          temperature: 0.2,
+        },
+      });
+    } catch (error) {
+      const placedOrder = steps.find((step) => step.tool === "placeOrder" && step.ok);
+      if (placedOrder) {
+        return {
+          reply: summarizePlacedOrder(placedOrder.result),
+          steps,
+        };
+      }
+      throw error;
+    }
 
     const calls = response.functionCalls ?? [];
 
@@ -69,6 +81,42 @@ export async function runAgent(messages: ChatMessage[]): Promise<AgentResult> {
     reply: "I needed too many steps for this request. Please try a simpler or more specific question.",
     steps,
   };
+}
+
+function summarizePlacedOrder(result: unknown): string {
+  if (!result || typeof result !== "object") {
+    return "Your order was placed successfully.";
+  }
+
+  const order = result as Record<string, unknown>;
+  const items = Array.isArray(order.items)
+    ? order.items
+        .map((item) => {
+          if (!item || typeof item !== "object") return "";
+          const line = item as Record<string, unknown>;
+          return typeof line.item === "string" ? line.item : "";
+        })
+        .filter(Boolean)
+        .join(", ")
+    : "";
+  const total = typeof order.total === "number" ? ` Total: Rs ${order.total}.` : "";
+  const pickup =
+    typeof order.pickup_time === "string"
+      ? ` Pickup: ${formatPickupTime(order.pickup_time)}.`
+      : "";
+  const balance =
+    typeof order.wallet_balance_after === "number"
+      ? ` Wallet balance left: Rs ${order.wallet_balance_after}.`
+      : "";
+
+  return `Your order was placed successfully${items ? `: ${items}.` : "."}${total}${pickup}${balance}`;
+}
+
+function formatPickupTime(time: string): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec(time);
+  if (!match) return time;
+  const hour = Number(match[1]);
+  return `${hour % 12 || 12}:${match[2]} ${hour < 12 ? "am" : "pm"}`;
 }
 
 async function runTool(name: string, rawArgs: unknown): Promise<AgentStep> {
