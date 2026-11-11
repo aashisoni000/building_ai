@@ -1,108 +1,123 @@
-# SRM Agentic AI Hackathon: Starter Template
+# CampusBite
 
-This is the starting point for every team. It already has the setup done, so you can spend your time on your problem statement.
+CampusBite is an SRM canteen ordering assistant. Students can ask about the menu, wallet, and pickup slots in plain English, place or cancel orders through the agent, and check recent orders. A kitchen board tracks orders from placed through collected.
 
-**Stack:** Next.js (App Router) · React · TypeScript · Tailwind CSS · Supabase PostgreSQL · Google Gemini API (function calling) · Zod · Vercel
+**Stack:** Next.js App Router · React · TypeScript · Tailwind CSS · Supabase PostgreSQL · Google Gemini function calling · Zod · Vercel
 
-## What is already working
+## Features
 
-- A passcode login that protects your app and your Gemini quota
-- A Supabase connection (server side only)
-- A Gemini agent loop with function calling: Gemini picks a tool, Zod checks the arguments, your code runs it, and the result goes back to Gemini
-- 3 example tools on a `tasks` table: `listTasks` (reads), `createTask` (writes) and `completeTask` (writes)
-- A chat screen that shows every tool the agent used
-- An example REST API (`/api/tasks`) and a live data list
-- Seed data for all 6 problem statements in `seed/`
+- Passcode-protected app and API routes
+- Student chat with six server-side agent tools:
+  - `getMenu`, `getWalletBalance`, `getPickupSlots`, `getMyOrders`
+  - `placeOrder`, `cancelOrder`
+- Order placement and cancellation use the database functions in the CampusBite seed. The database checks wallet balance, stock, pickup capacity, and cancellation eligibility atomically.
+- Student dashboard with wallet, today's orders, and menu availability
+- Kitchen board at `/kitchen` with **New orders**, **Preparing**, and **Ready for pickup** columns
+- Kitchen order status transitions: `placed` → `preparing` → `ready` → `collected`
+- Menu and student panels refresh every five seconds; the kitchen board polls every three seconds.
+- `/api/health` reports configured environment variables and checks that Supabase can read `menu_items`.
 
-## Setup (about 30 minutes)
+## Setup
 
-1. **Create your team repo.** Click **Use this template** on GitHub and name it `team-<number>-ps<number>`.
-2. **Install.** Run `git clone <your repo>`, `cd` into it, and run `npm install`. You need Node.js 20 or later.
-3. **Create the database.** Create a project on [supabase.com](https://supabase.com). In **SQL Editor**, run `seed/00_starter_example.sql`, then the seed file for your problem.
-4. **Get the keys.**
-   - Supabase **Project Settings**: copy the Project URL and the secret (service_role) key
-   - [Google AI Studio](https://aistudio.google.com): click **Get API key**
-5. **Create `.env.local`.** Copy `.env.example` to `.env.local` and fill in all the values.
-6. **Run it.** Run `npm run dev`, open http://localhost:3000, enter your passcode and try a sample prompt.
-7. **Deploy.** On [vercel.com](https://vercel.com), import the repo, add the same environment variables, and deploy.
+### 1. Install
 
-To check your settings, open `/api/health`. It shows which variables are missing (never their values).
+Use Node.js 20 or later:
 
-## Folder guide
-
-```
-app/
-  page.tsx               Home page: agent chat + data list   <- change
-  login/page.tsx         Passcode page
-  api/agent/route.ts     POST /api/agent: runs the agent
-  api/tasks/route.ts     Example REST API                    <- copy for your tables
-  api/health/route.ts    Shows which settings are missing
-components/
-  AgentChat.tsx          Chat UI that shows tool calls       <- change the sample prompts
-  TaskList.tsx           Example data list                   <- replace with your data
-lib/
-  agent/tools.ts         THE AGENT TOOLS                     <- your main work
-  agent/systemPrompt.ts  Instructions for Gemini             <- rewrite for your problem
-  agent/runAgent.ts      The agent loop (max 5 rounds)
-  agent/defineTool.ts    Turns Zod schemas into Gemini tool declarations
-  supabase.ts            Server-side Supabase client
-  schemas.ts             Shared Zod schemas
-proxy.ts                 Passcode gate for every page and API
-seed/                    SQL seed data for each problem statement
+```bash
+npm install
 ```
 
-## How to add a tool (the main hackathon work)
+### 2. Create and seed Supabase
 
-Open `lib/agent/tools.ts` and copy this pattern:
+Create a project at [supabase.com](https://supabase.com), open **SQL Editor**, and run the complete [`seed/campusbite.sql`](./seed/campusbite.sql) script.
 
-```ts
-const createReturnRequest = defineTool({
-  name: "createReturnRequest",
-  description: "Use this when the customer wants to return a product from a delivered order.",
-  writes: true,
-  schema: z.object({
-    order_id: z.number().int().describe("The order number, for example 1007"),
-    product_id: z.string().describe("The product id, for example P101"),
-    reason: z.string().min(3).describe("Why the customer is returning it"),
-  }),
-  run: async ({ order_id, product_id, reason }) => {
-    // 1. Check your business rule (for example the return window)
-    // 2. Read or write Supabase
-    // 3. Return a small, clean object, or throw new Error("clear message")
-  },
-});
+This script creates the CampusBite tables, sample menu, wallets, pickup slots, sample orders, and the `place_order` and `cancel_order` database functions. **It is also a reset script:** running it again drops and recreates the CampusBite tables and resets their data. You do not need to run `seed/00_starter_example.sql` for this app.
 
-export const tools: AgentTool[] = [createReturnRequest /*, more tools */];
-```
+The demo student is `S001` (Priya Ramesh). The app selects this ID in `lib/campusbite.ts`; it is not supplied by the browser or the agent.
 
-Good tools:
+### 3. Configure local environment
 
-- Have a description that starts with "Use this when..."
-- Describe every field and its format, for example "YYYY-MM-DD"
-- Check business rules in code, not only in the prompt
-- Return small objects that Gemini can read easily
-- Throw clear errors, which the agent then explains to the user
+Copy `.env.example` to `.env.local` and fill in:
 
-Then rewrite `lib/agent/systemPrompt.ts`. Name the business user, the logged-in user id (for example `C001`), your business rules and when to use each tool.
-
-## Rules to remember
-
-- Never commit `.env.local`. It is already in `.gitignore`.
-- Never use `SUPABASE_SECRET_KEY` in frontend code. Only files under `lib/` and `app/api/` may use it.
-- Do not change the core stack.
-- Before you push, run `npm run build`. If it fails on your laptop, it will fail on Vercel too.
-
-## Seed files
-
-| File | Problem |
+| Variable | Purpose |
 | --- | --- |
-| `00_starter_example.sql` | Example `tasks` table (run first) |
-| `demo_eventease.sql` | Day 1 lab: EventEase campus events |
-| `ps1_ecommerce_support.sql` | PS1 E-commerce Customer Support Agent |
-| `ps2_inventory_restock.sql` | PS2 Inventory Restock Agent |
-| `ps3_clinic_appointments.sql` | PS3 Clinic Appointment Agent |
-| `ps4_it_helpdesk.sql` | PS4 IT Helpdesk Ticket Agent |
-| `ps5_expense_claims.sql` | PS5 Expense Claim Assistant |
-| `ps6_job_match.sql` | PS6 Job Match Agent |
+| `GEMINI_API_KEY` | Google AI Studio API key for the agent |
+| `GEMINI_MODEL` | Optional model name; the application has a default |
+| `SUPABASE_URL` | URL of the Supabase project where you ran `campusbite.sql` |
+| `SUPABASE_SECRET_KEY` | Server-only Supabase secret/service-role key |
+| `APP_PASSCODE` | Shared passcode protecting the app |
 
-All dates in the seed data are relative to today, so the data is always fresh. All names, companies and records are made up. You can run a seed file again at any time to reset your data.
+Never commit `.env.local`, expose `SUPABASE_SECRET_KEY` to browser code, or paste credentials into chat or screenshots.
+
+### 4. Run locally
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000), enter the passcode, and try the sample prompts. Visit `/kitchen` for the kitchen board.
+
+### 5. Deploy to Vercel
+
+Import the repository into Vercel and add the environment variables above to the **Production** environment. Make sure `SUPABASE_URL` and `SUPABASE_SECRET_KEY` belong to the same Supabase project where the seed was run. Redeploy after changing variables.
+
+Check `https://<your-deployment>/api/health`. A healthy response has all required settings set to `true` and `database.menu_items` set to `true`. If the tables exist in SQL Editor but the API reports a schema-cache error, confirm `public` is an exposed schema in Supabase API settings and reload the PostgREST schema cache:
+
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+## Routes
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Student chat, wallet/orders, and live menu |
+| `/kitchen` | Kitchen order board and status controls |
+| `/api/agent` | Agent chat and tool execution |
+| `/api/menu` | All menu items, including sold-out items |
+| `/api/me` | Demo student's wallet and five latest orders |
+| `/api/kitchen` | Active kitchen orders; `POST` advances an order to the next status |
+| `/api/health` | Environment configuration and Supabase menu-table check |
+| `/api/login`, `/api/logout` | Passcode login/logout |
+
+## Project structure
+
+```text
+app/
+  page.tsx                 Student dashboard
+  kitchen/page.tsx         Kitchen order board
+  login/page.tsx           Passcode login
+  api/agent/route.ts       Gemini agent endpoint
+  api/health/route.ts      Configuration and database check
+  api/kitchen/route.ts     Kitchen order list and status updates
+  api/me/route.ts          Student wallet and order history
+  api/menu/route.ts        Menu endpoint
+components/
+  AgentChat.tsx            Agent chat and tool-call display
+  MenuPanel.tsx            Live categorized menu
+  WalletOrders.tsx         Wallet balance and recent orders
+lib/
+  agent/tools.ts            CampusBite tools
+  agent/systemPrompt.ts     Agent ordering rules
+  agent/runAgent.ts         Gemini function-calling loop
+  campusbite.ts             Demo student ID and pickup-time formatting
+  supabase.ts               Server-side Supabase client
+seed/
+  campusbite.sql            CampusBite schema, functions, and demo data
+```
+
+## Important demo limitations
+
+- The app uses one shared passcode and a fixed demo student ID, not individual student authentication. Do not use this identity model for real wallet or payment data.
+- The passcode gate protects app routes, including `/kitchen`, but there is no separate kitchen-role authorization.
+- Order placement and cancellation mutate the seeded demo database. A successful order deducts wallet balance, reduces stock, and books a pickup slot.
+- If Gemini is temporarily unavailable, some matching read-only questions and the specific demo lunch-with-sweet order flow can use live Supabase data directly. Any fallback order is a real database order, not a mock response.
+
+## Validation
+
+Before deploying, run:
+
+```bash
+npm run typecheck
+npm run build
+```
